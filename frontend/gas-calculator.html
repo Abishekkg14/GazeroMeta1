@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Calculator - GaseroMeta</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .gas-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            max-width: 500px;
+            margin: 2rem auto;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+
+        .highlight {
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .total-cost {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #4CAF50;
+            color: white;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .total-cost .metric-value {
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .refresh-button {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            margin-top: 1rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .refresh-button:hover {
+            background: #1976D2;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .updating {
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="gas-card" id="gasCard">
+            <h2 style="text-align: center; margin-bottom: 2rem;">Live Gas Calculator</h2>
+            
+            <div class="metric">
+                <span class="metric-label">Current Gas Price</span>
+                <span class="metric-value" id="gasPrice">Loading...</span>
+            </div>
+
+            <div class="metric highlight">
+                <span class="metric-label">ETH Price (USD)</span>
+                <span class="metric-value" id="ethPrice">Loading...</span>
+            </div>
+
+            <div class="metric">
+                <span class="metric-label">Estimated Gas Limit</span>
+                <span class="metric-value" id="gasLimit">Loading...</span>
+            </div>
+
+            <div class="metric highlight">
+                <span class="metric-label">Cost in ETH</span>
+                <span class="metric-value" id="ethCost">Loading...</span>
+            </div>
+
+            <div class="total-cost">
+                <span class="metric-label">Total Cost in USD</span>
+                <span class="metric-value" id="usdCost">Loading...</span>
+            </div>
+
+            <button class="refresh-button" onclick="fetchGasData()">
+                Refresh Gas Prices
+            </button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchGasData() {
+            const gasCard = document.getElementById('gasCard');
+            gasCard.classList.add('updating');
+            
+            try {
+                const response = await fetch('/calculate-gas-cost');
+                const data = await response.json();
+
+                // Format and display the data
+                document.getElementById('gasPrice').textContent = `${parseFloat(data.gasPriceGwei).toFixed(6)} Gwei`;
+                document.getElementById('ethPrice').textContent = `$${data.ethPriceUsd.toLocaleString()}`;
+                document.getElementById('gasLimit').textContent = parseInt(data.estimatedGasLimit).toLocaleString();
+                document.getElementById('ethCost').textContent = `${parseFloat(data.gasCostEth).toFixed(8)} ETH`;
+                document.getElementById('usdCost').textContent = `$${parseFloat(data.gasCostUsd).toFixed(4)}`;
+            } catch (error) {
+                console.error('Error fetching gas data:', error);
+                alert('Failed to fetch gas prices. Please try again.');
+            } finally {
+                gasCard.classList.remove('updating');
+            }
+        }
+
+        // Fetch initial data
+        fetchGasData();
+
+        // Update every 30 seconds
+        setInterval(fetchGasData, 30000);
+    </script>
+</body>
+</html>

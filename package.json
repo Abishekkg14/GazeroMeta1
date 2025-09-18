@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "permissionless": "^0.2.57",
+    "viem": "^2.37.6"
+  }
+}
