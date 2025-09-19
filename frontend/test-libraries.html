@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Test - GaseroMeta</title>
+</head>
+<body>
+    <h1>Library Loading Test</h1>
+    <div id="results"></div>
+    
+    <!-- Load required libraries from CDN -->
+    <script src="https://unpkg.com/viem@2.37.6/dist/viem.js"></script>
+    <script src="https://unpkg.com/permissionless@0.2.57/dist/permissionless.js"></script>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(message, success = true) {
+            const div = document.createElement('div');
+            div.style.color = success ? 'green' : 'red';
+            div.style.margin = '10px 0';
+            div.style.padding = '10px';
+            div.style.border = `1px solid ${success ? 'green' : 'red'}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+        
+        // Test viem
+        if (typeof viem !== 'undefined') {
+            addResult('✅ Viem library loaded successfully');
+            try {
+                const client = viem.createPublicClient({
+                    chain: viem.sepolia,
+                    transport: viem.http('https://rpc.sepolia.org')
+                });
+                addResult('✅ Viem public client created successfully');
+            } catch (e) {
+                addResult('❌ Error creating viem client: ' + e.message, false);
+            }
+        } else {
+            addResult('❌ Viem library not loaded', false);
+        }
+        
+        // Test permissionless
+        if (typeof permissionless !== 'undefined') {
+            addResult('✅ Permissionless library loaded successfully');
+        } else {
+            addResult('❌ Permissionless library not loaded', false);
+        }
+        
+        // Test MetaMask
+        if (typeof window.ethereum !== 'undefined') {
+            addResult('✅ MetaMask detected');
+        } else {
+            addResult('❌ MetaMask not detected', false);
+        }
+        
+        // Test overall status
+        if (typeof viem !== 'undefined' && typeof permissionless !== 'undefined' && typeof window.ethereum !== 'undefined') {
+            addResult('🎉 All libraries loaded successfully! Your app should work.');
+        } else {
+            addResult('⚠️ Some libraries are missing. Check the errors above.', false);
+        }
+    </script>
+</body>
+</html>

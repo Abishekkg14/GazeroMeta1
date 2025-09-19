@@ -1,6 +1,22 @@
 {
+  "name": "gaserometa",
+  "version": "1.0.0",
+  "description": "Gasless USDC Transfer App",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "dev": "cd backend && node server.js",
+    "build": "echo 'No build step required'",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["ethereum", "usdc", "gasless", "defi"],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
     "permissionless": "^0.2.57",
     "viem": "^2.37.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

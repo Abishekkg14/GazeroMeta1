@@ -1,8 +1,11 @@
+console.log("🚀 APP.JS LOADED - VERSION 3 - NEW USDC CONTRACT");
 // ---------------- CONFIG & ABIs ----------------
 const PIMLICO_API_KEY = "pim_dhJ9peZUgu52XpuVsbWcQ4";
 const SEPOLIA_CHAIN_ID = 11155111;
 const ENTRY_POINT = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-const USDC_ADDRESS = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+// Updated Sepolia USDC contract address (verified)
+const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+console.log("🔧 USDC Contract Address:", USDC_ADDRESS);
 
 const BUNDLER_URL = `https://api.pimlico.io/v1/sepolia/rpc?apikey=${PIMLICO_API_KEY}`;
 const PAYMASTER_URL = `https://api.pimlico.io/v2/sepolia/rpc?apikey=${PIMLICO_API_KEY}`;
@@ -10,23 +13,52 @@ const ETHERSCAN_BASE = "https://sepolia.etherscan.io/";
 
 // Initialize public client only if viem is available
 let publicClient = null;
+console.log('Checking for viem library...', typeof viem);
 if (typeof viem !== 'undefined') {
+    console.log('Viem found, creating public client...');
+    // Use multiple RPC endpoints for better reliability
+    const sepoliaRPCs = [
+        'https://rpc.sepolia.dev',
+        'https://rpc.sepolia.org',
+        'https://eth-sepolia.public.blastapi.io',
+        'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'
+    ];
+    
     publicClient = viem.createPublicClient({
         chain: viem.sepolia,
-        transport: viem.http('https://rpc.sepolia.org')
+        transport: viem.http(sepoliaRPCs[0]) // Start with the most reliable one
     });
+    console.log('Public client created successfully with RPC:', sepoliaRPCs[0]);
+} else {
+    console.warn('Viem library not found - some features will be disabled');
 }
 
-const USDC_ABI = [{
-    inputs: [
-        { name: "to", type: "address" },
-        { name: "amount", type: "uint256" }
-    ],
-    name: "transfer",
-    outputs: [{ type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function"
-}];
+const USDC_ABI = [
+    {
+        inputs: [
+            { name: "to", type: "address" },
+            { name: "amount", type: "uint256" }
+        ],
+        name: "transfer",
+        outputs: [{ type: "bool" }],
+        stateMutability: "nonpayable",
+        type: "function"
+    },
+    {
+        inputs: [{ name: "owner", type: "address" }],
+        name: "balanceOf",
+        outputs: [{ type: "uint256" }],
+        stateMutability: "view",
+        type: "function"
+    },
+    {
+        inputs: [],
+        name: "decimals",
+        outputs: [{ type: "uint8" }],
+        stateMutability: "view",
+        type: "function"
+    }
+];
 
 // ---------------- GLOBALS ----------------
 let walletClient;
@@ -105,6 +137,10 @@ async function init() {
 
 // Runtime library checks (viem & permissionless are optional for a basic MetaMask connect)
 function checkLibraries() {
+    console.log('Checking libraries...');
+    console.log('viem available:', typeof viem !== 'undefined');
+    console.log('permissionless available:', typeof permissionless !== 'undefined');
+    
     const missing = [];
     if (typeof viem === 'undefined') missing.push('viem');
     if (typeof permissionless === 'undefined') missing.push('permissionless');
@@ -116,6 +152,7 @@ function checkLibraries() {
         status.textContent = msg;
         return false;
     }
+    console.log('All libraries available');
     return true;
 }
 
@@ -133,8 +170,13 @@ async function connectWallet() {
     try {
         hideError();
         status.textContent = 'Connecting...';
+        console.log('Starting wallet connection...');
 
-        if (!window.ethereum) throw new Error('MetaMask is not installed');
+        if (!window.ethereum) {
+            console.error('MetaMask not detected');
+            throw new Error('MetaMask is not installed');
+        }
+        console.log('MetaMask detected, requesting accounts...');
 
         // Basic EIP-1193 connection (works with MetaMask reliably)
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -144,69 +186,29 @@ async function connectWallet() {
         // get chainId via provider
         const chainHex = await window.ethereum.request({ method: 'eth_chainId' });
         const chainId = parseInt(chainHex, 16);
+        console.log('Current chain ID:', chainId, 'Expected:', SEPOLIA_CHAIN_ID);
+        
         if (chainId !== SEPOLIA_CHAIN_ID) {
             status.textContent = 'Switching to Sepolia...';
+            console.log('Switching to Sepolia network...');
             try {
                 await switchToSepolia();
+                console.log('Successfully switched to Sepolia');
             } catch (swErr) {
                 console.warn('Switch chain failed', swErr);
+                showError('Failed to switch to Sepolia. Please switch manually in MetaMask.');
                 // continue — user can manually switch in MetaMask
             }
+        } else {
+            console.log('Already on Sepolia network');
         }
 
     // Update UI immediately with wallet address
     await updateUI();
 
-        // If advanced libraries exist, try to set up smart account (optional)
-        if (checkLibraries()) {
-            try {
-                status.textContent = 'Setting up smart account...';
-                // create a viem wallet client that uses window.ethereum (if available)
-                if (typeof viem !== 'undefined') {
-                    walletClient = viem.createWalletClient({
-                        transport: viem.custom(window.ethereum),
-                        chain: viem.sepolia
-                    });
-                }
-
-                bundlerClient = permissionless.createPimlicoBundlerClient({
-                    chain: viem.sepolia,
-                    transport: viem.http(BUNDLER_URL),
-                    entryPoint: ENTRY_POINT
-                });
-
-                paymasterClient = permissionless.createPimlicoPaymasterClient({
-                    chain: viem.sepolia,
-                    transport: viem.http(PAYMASTER_URL),
-                    entryPoint: ENTRY_POINT
-                });
-
-                if (typeof permissionless !== 'undefined') {
-                    smartAccountClient = await permissionless.createSmartAccountClient({
-                    account: { address: currentAccount, type: 'local' },
-                    entryPoint: ENTRY_POINT,
-                    chain: viem.sepolia,
-                    bundlerTransport: viem.http(BUNDLER_URL),
-                    middleware: {
-                        gasPrice: async () => await publicClient.getGasPrice(),
-                        sponsorUserOperation: paymasterClient.sponsorUserOperation
-                    }
-                    });
-                } else {
-                    throw new Error('permissionless library not available');
-                }
-
-                status.textContent = 'Connected (smart account ready)';
-                await updateUI();
-            } catch (saErr) {
-                console.warn('Smart account setup failed:', saErr);
-                // Smart-account features are optional — keep wallet connected
-                status.textContent = 'Connected (wallet only)';
-                showError('Smart-account setup failed — continuing with wallet-only mode.');
-            }
-        } else {
-            status.textContent = 'Connected (wallet only)';
-        }
+        // Skip smart account setup for now - use simple MetaMask transactions
+        status.textContent = 'Connected (wallet ready)';
+        console.log('Using simple MetaMask transactions (no smart account)');
 
     } catch (err) {
         console.error('Connection error:', err);
@@ -232,20 +234,31 @@ async function switchToSepolia() {
 
 // Add Sepolia Network
 async function addSepoliaNetwork() {
-    await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-            chainId: '0xaa36a7',
-            chainName: 'Sepolia Test Network',
-            nativeCurrency: {
-                name: 'SepoliaETH',
-                symbol: 'SepoliaETH',
-                decimals: 18
-            },
-            rpcUrls: ['https://rpc.sepolia.org'],
-            blockExplorerUrls: ['https://sepolia.etherscan.io']
-        }]
-    });
+    console.log('Adding Sepolia network to MetaMask...');
+    try {
+        await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+                chainId: '0xaa36a7', // 11155111 in hex
+                chainName: 'Sepolia Test Network',
+                nativeCurrency: {
+                    name: 'SepoliaETH',
+                    symbol: 'SepoliaETH',
+                    decimals: 18
+                },
+                rpcUrls: [
+                    'https://rpc.sepolia.dev',
+                    'https://rpc.sepolia.org',
+                    'https://eth-sepolia.public.blastapi.io'
+                ],
+                blockExplorerUrls: ['https://sepolia.etherscan.io']
+            }]
+        });
+        console.log('Sepolia network added successfully');
+    } catch (error) {
+        console.error('Failed to add Sepolia network:', error);
+        throw error;
+    }
 }
 
 // Handle Account Changes
@@ -333,10 +346,41 @@ async function updateUI() {
                 const balance = await publicClient.getBalance({ address: currentAccount });
                 const balanceInEth = viem.formatEther(balance);
                 document.getElementById('yourBalance').innerHTML = `Wallet Balance: ${parseFloat(balanceInEth).toFixed(4)} ETH`;
+                
+                // Check USDC balance
+                try {
+                    const usdcBalance = await publicClient.readContract({
+                        address: USDC_ADDRESS,
+                        abi: USDC_ABI,
+                        functionName: 'balanceOf',
+                        args: [currentAccount]
+                    });
+                    const usdcFormatted = viem.formatUnits(usdcBalance, 6);
+                    document.getElementById('yourBalance').innerHTML += `<br>USDC Balance: ${parseFloat(usdcFormatted).toFixed(2)} USDC`;
+                } catch (usdcErr) {
+                    console.warn('Failed to fetch USDC balance:', usdcErr);
+                    document.getElementById('yourBalance').innerHTML += `<br>USDC Balance: Error fetching`;
+                }
             } else if (window.ethereum) {
                 const balHex = await window.ethereum.request({ method: 'eth_getBalance', params: [currentAccount, 'latest'] });
                 const balanceInEth = parseInt(balHex, 16) / 1e18;
                 document.getElementById('yourBalance').innerHTML = `Wallet Balance: ${parseFloat(balanceInEth).toFixed(4)} ETH`;
+                
+                // Try to get USDC balance via direct contract call
+                try {
+                    const usdcBalanceHex = await window.ethereum.request({
+                        method: 'eth_call',
+                        params: [{
+                            to: USDC_ADDRESS,
+                            data: '0x70a08231' + currentAccount.slice(2).padStart(64, '0')
+                        }, 'latest']
+                    });
+                    const usdcBalance = parseInt(usdcBalanceHex, 16) / 1000000; // USDC has 6 decimals
+                    document.getElementById('yourBalance').innerHTML += `<br>USDC Balance: ${usdcBalance.toFixed(2)} USDC`;
+                } catch (usdcErr) {
+                    console.warn('Failed to fetch USDC balance via RPC:', usdcErr);
+                    document.getElementById('yourBalance').innerHTML += `<br>USDC Balance: Error fetching`;
+                }
             }
 
             // Recipient info (show address if filled)
@@ -347,19 +391,37 @@ async function updateUI() {
                 document.getElementById('recipientBalance').innerHTML = '';
             }
 
-            // Paymaster balance placeholder (real fetch requires paymaster RPC)
-            document.getElementById('paymasterBalance').innerHTML = `Paymaster Balance: --`;
+            // USDC Contract info
+            document.getElementById('paymasterBalance').innerHTML = `USDC Contract: ${USDC_ADDRESS.slice(0,6)}...${USDC_ADDRESS.slice(-4)}`;
 
             // Network gas price
             networkSection.style.display = 'block';
-            if (publicClient && typeof viem !== 'undefined') {
-                const gasPrice = await publicClient.getGasPrice();
-                const gasPriceGwei = viem.formatGwei(gasPrice);
-                document.getElementById('gasInfo').innerHTML = `Current Gas Price: ${parseFloat(gasPriceGwei).toFixed(2)} Gwei`;
-            } else if (window.ethereum) {
-                const gpHex = await window.ethereum.request({ method: 'eth_gasPrice' });
-                const gp = parseInt(gpHex, 16) / 1e9;
-                document.getElementById('gasInfo').innerHTML = `Current Gas Price: ${parseFloat(gp).toFixed(2)} Gwei`;
+            try {
+                if (publicClient && typeof viem !== 'undefined') {
+                    const gasPrice = await publicClient.getGasPrice();
+                    const gasPriceGwei = viem.formatGwei(gasPrice);
+                    document.getElementById('gasInfo').innerHTML = `Current Gas Price: ${parseFloat(gasPriceGwei).toFixed(2)} Gwei`;
+                } else if (window.ethereum) {
+                    const gpHex = await window.ethereum.request({ method: 'eth_gasPrice' });
+                    const gp = parseInt(gpHex, 16) / 1e9;
+                    document.getElementById('gasInfo').innerHTML = `Current Gas Price: ${parseFloat(gp).toFixed(2)} Gwei`;
+                } else {
+                    // Fallback: fetch from backend
+                    try {
+                        const gasResp = await fetch('/calculate-gas-cost');
+                        if (gasResp.ok) {
+                            const gasData = await gasResp.json();
+                            document.getElementById('gasInfo').innerHTML = `Current Gas Price: ${parseFloat(gasData.gasPriceGwei).toFixed(2)} Gwei`;
+                        } else {
+                            document.getElementById('gasInfo').innerHTML = `Current Gas Price: Unable to fetch`;
+                        }
+                    } catch (e) {
+                        document.getElementById('gasInfo').innerHTML = `Current Gas Price: Unable to fetch`;
+                    }
+                }
+            } catch (gasErr) {
+                console.warn('Gas price fetch error:', gasErr);
+                document.getElementById('gasInfo').innerHTML = `Current Gas Price: Error fetching`;
             }
         } catch (balErr) {
             console.warn('Balance/gas fetch error:', balErr);
@@ -368,9 +430,17 @@ async function updateUI() {
         // Populate transaction history
         if (transactionHistory.length > 0) {
             transactionSection.style.display = 'block';
-            txLinks.innerHTML = transactionHistory.map(t => `
-                <div class="mt-2">✅ ${t.status} - ${t.amount} USDC to ${t.to.slice(0,6)}...${t.to.slice(-4)} - <a href="${ETHERSCAN_BASE}tx/${t.hash}" target="_blank">View Tx</a></div>
-            `).join('');
+            txLinks.innerHTML = transactionHistory.map(t => {
+                const statusIcon = t.status === 'Pending' ? '⏳' : '✅';
+                const timeAgo = t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : '';
+                return `
+                    <div class="mt-2" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin: 4px 0;">
+                        ${statusIcon} <strong>${t.status}</strong> - ${t.amount} USDC to ${t.to.slice(0,6)}...${t.to.slice(-4)} 
+                        ${timeAgo ? `(${timeAgo})` : ''}
+                        <br><a href="${ETHERSCAN_BASE}tx/${t.hash}" target="_blank" style="color: #007bff;">View on Etherscan</a>
+                    </div>
+                `;
+            }).join('');
         }
 
     } catch (err) {
@@ -379,7 +449,7 @@ async function updateUI() {
     }
 }
 
-// Send USDC Function (supports gasless when smart account available, otherwise wallet-only transfer)
+// Send USDC Function - Simple MetaMask ERC20 transfer
 async function sendUSDC() {
     if (!currentAccount) {
         showError('Please connect your wallet first');
@@ -388,7 +458,8 @@ async function sendUSDC() {
 
     try {
         hideError();
-        status.textContent = 'Preparing transaction...';
+        status.textContent = 'Preparing USDC transfer...';
+        console.log('Starting USDC transfer...');
 
         const to = recipientInput.value?.trim();
         const amount = amountInput.value?.toString();
@@ -398,106 +469,150 @@ async function sendUSDC() {
             return;
         }
 
-        // If viem exists, validate address
+        // Validate address
         if (typeof viem !== 'undefined') {
             if (!viem.isAddress(to)) {
                 showError('Invalid recipient address');
                 return;
             }
+        } else {
+            // Basic address validation if viem is not available
+            if (!to.match(/^0x[a-fA-F0-9]{40}$/)) {
+                showError('Invalid recipient address format');
+                return;
+            }
         }
 
-        // Attempt gasless flow if smartAccountClient exists
-        if (smartAccountClient && bundlerClient && typeof viem !== 'undefined') {
-            const callData = viem.encodeFunctionData({
-                abi: USDC_ABI,
-                functionName: 'transfer',
-                args: [to, viem.parseUnits(amount, 6)]
-            });
-
-            status.textContent = 'Creating gasless transaction...';
-            const userOpHash = await smartAccountClient.sendUserOperation({
-                target: USDC_ADDRESS,
-                data: callData,
-                value: 0n
-            });
-
-            status.innerHTML = `Transaction sent! Waiting for confirmation... <br>
-                <a href="https://www.jiffyscan.xyz/userOpHash/${userOpHash}?network=sepolia" target="_blank">View on JiffyScan</a>`;
-
-            const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
-            const txHash = receipt.receipt.transactionHash;
-
-            transactionHistory.unshift({ to, amount, hash: txHash, status: 'Confirmed (gasless)' });
-            paymentStatus.style.display = 'block';
-            paymentStatus.textContent = `Gasless transaction confirmed: ${txHash}`;
-
-            // Clear inputs
-            recipientInput.value = '';
-            amountInput.value = '';
-
-            await updateUI();
-            return;
-        }
-
-        // Fallback: wallet-only ERC20 transfer through MetaMask
         if (!window.ethereum) {
-            showError('MetaMask not available for sending a standard transaction');
+            showError('MetaMask not available');
             return;
         }
 
-        status.textContent = 'Creating ERC20 transaction via wallet...';
-
-        // Ask backend for an estimate (optional but recommended)
+        // Get gas estimate first
+        status.textContent = 'Estimating gas...';
+        let gasEstimate = null;
         try {
             const estResp = await fetch('/estimate-gas', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ to, amount })
             });
             if (estResp.ok) {
                 const est = await estResp.json();
+                gasEstimate = est;
                 paymentStatus.style.display = 'block';
                 paymentStatus.textContent = `Estimated gas: ${est.estimatedGas} units (@ ${est.gasPriceGwei} Gwei) ≈ ${est.gasCostEth} ETH ($${est.gasCostUsd})`;
             }
         } catch (e) {
-            console.warn('Estimate-gas failed', e);
+            console.warn('Gas estimation failed:', e);
         }
 
-        // Request prepared calldata from backend (/send-usdc mode=client)
+        // Prepare the transaction
+        status.textContent = 'Preparing transaction...';
+        console.log(`Preparing USDC transfer: ${amount} USDC to ${to}`);
+        
         const sendResp = await fetch('/send-usdc', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ to, amount, mode: 'client' })
         });
 
         if (!sendResp.ok) {
-            const err = await sendResp.json().catch(()=>({error:'send prepare failed'}));
+            const err = await sendResp.json().catch(()=>({error:'Failed to prepare transaction'}));
+            console.error('Backend error:', err);
             throw new Error(err.error || 'Failed to prepare transaction');
         }
 
         const { prepared } = await sendResp.json();
-        if (!prepared) throw new Error('No prepared transaction returned');
-
-        const txParams = { from: currentAccount, to: prepared.to, data: prepared.data, value: '0x0' };
-        const txHash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [txParams] });
-
-        // Report to backend the tx hash so server txHistory is updated
-        try {
-            await fetch('/report-tx', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ hash: txHash, from: currentAccount, to, amount }) });
-        } catch (reportErr) {
-            console.warn('report-tx failed', reportErr);
+        if (!prepared) {
+            throw new Error('No prepared transaction returned');
         }
 
-    transactionHistory.unshift({ to, amount, hash: txHash, status: 'Pending (wallet)' });
-    paymentStatus.style.display = 'block';
-    paymentStatus.textContent = `Transaction sent via wallet: ${txHash}`;
+        console.log('Transaction prepared:', prepared);
+        console.log('🔧 USDC Contract from frontend:', USDC_ADDRESS);
+        console.log('🔧 Transaction target from backend:', prepared.to);
+        
+        if (prepared.to !== USDC_ADDRESS) {
+            console.error('❌ MISMATCH! Backend returned wrong contract address!');
+            console.error('Expected:', USDC_ADDRESS);
+            console.error('Got:', prepared.to);
+        } else {
+            console.log('✅ Contract addresses match!');
+        }
+        
+        if (typeof viem !== 'undefined') {
+            console.log('Amount in wei:', viem.parseUnits(amount, 6).toString());
+        } else {
+            console.log('Amount in wei:', (parseFloat(amount) * 1000000).toString());
+        }
 
-    await updateUI();
+        // Send transaction via MetaMask
+        status.textContent = 'Sending transaction via MetaMask...';
+        const txParams = { 
+            from: currentAccount, 
+            to: prepared.to, 
+            data: prepared.data, 
+            value: '0x0'
+        };
 
-    // Redirect to backend transaction status page after a short delay
-    setTimeout(() => { window.location.href = '/tx-status'; }, 900);
+        // Add gas limit if we have an estimate
+        if (gasEstimate) {
+            txParams.gas = '0x' + parseInt(gasEstimate.estimatedGas).toString(16);
+        }
+
+        console.log('Sending transaction with params:', txParams);
+        const txHash = await window.ethereum.request({ 
+            method: 'eth_sendTransaction', 
+            params: [txParams] 
+        });
+
+        console.log('Transaction sent:', txHash);
+
+        // Update UI immediately
+        transactionHistory.unshift({ 
+            to, 
+            amount, 
+            hash: txHash, 
+            status: 'Pending',
+            timestamp: new Date().toISOString()
+        });
+
+        status.textContent = 'Transaction sent! Waiting for confirmation...';
+        paymentStatus.style.display = 'block';
+        paymentStatus.textContent = `Transaction sent: ${txHash}`;
+
+        // Clear inputs
+        recipientInput.value = '';
+        amountInput.value = '';
+
+        // Update UI
+        await updateUI();
+
+        // Show transaction link
+        status.innerHTML = `Transaction sent! <br>
+            <a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank">View on Etherscan</a>`;
+
+        // Report to backend
+        try {
+            await fetch('/report-tx', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ 
+                    hash: txHash, 
+                    from: currentAccount, 
+                    to, 
+                    amount,
+                    status: 'sent'
+                }) 
+            });
+        } catch (reportErr) {
+            console.warn('Failed to report transaction to backend:', reportErr);
+        }
 
     } catch (err) {
         console.error('USDC transfer error:', err);
         showError(err.message || String(err));
+        status.textContent = 'Transaction failed';
     }
 }
 

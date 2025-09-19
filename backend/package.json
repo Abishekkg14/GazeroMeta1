@@ -1,18 +1,24 @@
 {
-  "name": "backend",
+  "name": "gaserometa-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Gasless USDC Transfer Backend API",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'No build step required'",
+    "deploy": "echo 'Deploy to your preferred platform'"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["ethereum", "usdc", "gasless", "defi", "api"],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
     "ethers": "^6.15.0",
     "express": "^5.1.0",
     "node-fetch": "^2.7.0",
     "path": "^0.12.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

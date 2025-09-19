@@ -224,6 +224,15 @@
     </div>
   </div>
   
-  <script src="app.js"></script>
+  <!-- Load required libraries from CDN with fallbacks -->
+  <script src="https://cdn.jsdelivr.net/npm/viem@2.37.6/dist/viem.js"></script>
+  <script>
+    // Fallback if viem doesn't load
+    if (typeof viem === 'undefined') {
+      console.warn('Primary viem CDN failed, trying fallback...');
+      document.write('<script src="https://unpkg.com/viem@2.37.6/dist/viem.js"><\/script>');
+    }
+  </script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete App Test - GaseroMeta</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-item { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        .test-section { margin: 20px 0; padding: 15px; border: 2px solid #ddd; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Complete GaseroMeta App Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Server & Backend Test</h2>
+        <div id="serverResults"></div>
+        <button onclick="testServer()">Test Server Connection</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. USDC Contract Test</h2>
+        <div id="contractResults"></div>
+        <button onclick="testContract()">Test USDC Contract</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. MetaMask Integration Test</h2>
+        <div id="metamaskResults"></div>
+        <button onclick="testMetaMask()">Test MetaMask</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Gas Price Test</h2>
+        <div id="gasResults"></div>
+        <button onclick="testGasPrice()">Test Gas Price</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. Complete Transaction Test</h2>
+        <div id="transactionResults"></div>
+        <button onclick="testTransaction()">Test Full Transaction Flow</button>
+    </div>
+    
+    <script>
+        const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+        const OLD_USDC_ADDRESS = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+        
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `test-item ${type}`;
+            div.textContent = message;
+            container.appendChild(div);
+        }
+        
+        function clearResults(containerId) {
+            document.getElementById(containerId).innerHTML = '';
+        }
+        
+        async function testServer() {
+            clearResults('serverResults');
+            addResult('serverResults', 'Testing server connection...', 'info');
+            
+            try {
+                const response = await fetch('/');
+                if (response.ok) {
+                    addResult('serverResults', '✅ Server is running and responding', 'success');
+                } else {
+                    addResult('serverResults', `❌ Server error: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult('serverResults', `❌ Server connection failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testContract() {
+            clearResults('contractResults');
+            addResult('contractResults', 'Testing USDC contract...', 'info');
+            addResult('contractResults', `Current USDC Address: ${USDC_ADDRESS}`, 'info');
+            addResult('contractResults', `Old USDC Address: ${OLD_USDC_ADDRESS}`, 'warning');
+            
+            try {
+                const response = await fetch('/send-usdc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        to: '0x45E5b33f3021128A3fE4a3FEe23ec937894068cA', 
+                        amount: '0.01', 
+                        mode: 'client' 
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('contractResults', '✅ Backend prepared transaction successfully', 'success');
+                    addResult('contractResults', `Transaction target: ${data.prepared.to}`, 'info');
+                    
+                    if (data.prepared.to === USDC_ADDRESS) {
+                        addResult('contractResults', '✅ Using CORRECT USDC contract address', 'success');
+                    } else if (data.prepared.to === OLD_USDC_ADDRESS) {
+                        addResult('contractResults', '❌ Using OLD USDC contract address - THIS WILL FAIL!', 'error');
+                    } else {
+                        addResult('contractResults', `❌ Unknown contract address: ${data.prepared.to}`, 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    addResult('contractResults', `❌ Backend error: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                addResult('contractResults', `❌ Contract test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testMetaMask() {
+            clearResults('metamaskResults');
+            addResult('metamaskResults', 'Testing MetaMask integration...', 'info');
+            
+            if (typeof window.ethereum === 'undefined') {
+                addResult('metamaskResults', '❌ MetaMask not detected', 'error');
+                return;
+            }
+            
+            addResult('metamaskResults', '✅ MetaMask detected', 'success');
+            
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if (accounts.length === 0) {
+                    addResult('metamaskResults', '⚠️ No accounts connected. Click "Connect" to connect your wallet.', 'warning');
+                } else {
+                    addResult('metamaskResults', `✅ Account connected: ${accounts[0]}`, 'success');
+                }
+                
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                const chainIdDecimal = parseInt(chainId, 16);
+                addResult('metamaskResults', `Current Chain ID: ${chainIdDecimal}`, 'info');
+                
+                if (chainIdDecimal === 11155111) {
+                    addResult('metamaskResults', '✅ Connected to Sepolia network', 'success');
+                } else {
+                    addResult('metamaskResults', '⚠️ Not on Sepolia network. Please switch to Sepolia.', 'warning');
+                }
+            } catch (error) {
+                addResult('metamaskResults', `❌ MetaMask test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testGasPrice() {
+            clearResults('gasResults');
+            addResult('gasResults', 'Testing gas price fetching...', 'info');
+            
+            try {
+                const response = await fetch('/calculate-gas-cost');
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('gasResults', '✅ Gas price fetched successfully', 'success');
+                    addResult('gasResults', `Gas Price: ${data.gasPriceGwei} Gwei`, 'info');
+                    addResult('gasResults', `ETH Price: $${data.ethPriceUsd}`, 'info');
+                    addResult('gasResults', `Estimated Cost: $${data.gasCostUsd}`, 'info');
+                } else {
+                    addResult('gasResults', `❌ Gas price fetch failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult('gasResults', `❌ Gas price test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testTransaction() {
+            clearResults('transactionResults');
+            addResult('transactionResults', 'Testing complete transaction flow...', 'info');
+            
+            if (typeof window.ethereum === 'undefined') {
+                addResult('transactionResults', '❌ MetaMask not available for transaction test', 'error');
+                return;
+            }
+            
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if (accounts.length === 0) {
+                    addResult('transactionResults', '⚠️ Please connect MetaMask first', 'warning');
+                    return;
+                }
+                
+                addResult('transactionResults', '✅ MetaMask connected, testing transaction preparation...', 'success');
+                
+                // Test transaction preparation
+                const response = await fetch('/send-usdc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        to: '0x45E5b33f3021128A3fE4a3FEe23ec937894068cA', 
+                        amount: '0.01', 
+                        mode: 'client' 
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('transactionResults', '✅ Transaction prepared successfully', 'success');
+                    addResult('transactionResults', `Target Contract: ${data.prepared.to}`, 'info');
+                    addResult('transactionResults', `Transaction Data: ${data.prepared.data.slice(0, 20)}...`, 'info');
+                    
+                    if (data.prepared.to === USDC_ADDRESS) {
+                        addResult('transactionResults', '🎉 READY TO SEND! All systems working correctly.', 'success');
+                        addResult('transactionResults', 'You can now go to the main app and send USDC transactions.', 'info');
+                    } else {
+                        addResult('transactionResults', '❌ Wrong contract address - transactions will fail', 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    addResult('transactionResults', `❌ Transaction preparation failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                addResult('transactionResults', `❌ Transaction test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-run basic tests on page load
+        window.addEventListener('load', () => {
+            addResult('serverResults', 'Page loaded - click buttons to run tests', 'info');
+        });
+    </script>
+</body>
+</html>

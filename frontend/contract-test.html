@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USDC Contract Test - GaseroMeta</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-item { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>USDC Contract Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-item ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+        
+        // Test the current USDC contract address
+        const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+        const OLD_USDC_ADDRESS = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+        
+        addResult(`Current USDC Contract: ${USDC_ADDRESS}`, 'info');
+        addResult(`Old USDC Contract: ${OLD_USDC_ADDRESS}`, 'info');
+        
+        // Test if MetaMask is available
+        if (typeof window.ethereum === 'undefined') {
+            addResult('❌ MetaMask not detected', 'error');
+        } else {
+            addResult('✅ MetaMask detected', 'success');
+            
+            // Test contract interaction
+            testContract();
+        }
+        
+        async function testContract() {
+            try {
+                // Test current contract
+                addResult('Testing current USDC contract...', 'info');
+                
+                const response = await fetch('/send-usdc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        to: '0x45E5b33f3021128A3fE4a3FEe23ec937894068cA', 
+                        amount: '0.01', 
+                        mode: 'client' 
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ Backend prepared transaction successfully', 'success');
+                    addResult(`Transaction target: ${data.prepared.to}`, 'info');
+                    
+                    if (data.prepared.to === USDC_ADDRESS) {
+                        addResult('✅ Using correct USDC contract address', 'success');
+                    } else {
+                        addResult(`❌ Wrong contract address: ${data.prepared.to}`, 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    addResult(`❌ Backend error: ${error.error}`, 'error');
+                }
+                
+            } catch (error) {
+                addResult(`❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

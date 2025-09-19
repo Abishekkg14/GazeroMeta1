@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sepolia Network Test - GaseroMeta</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-item { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Sepolia Network Connection Test</h1>
+    <div id="results"></div>
+    
+    <h2>Quick Actions</h2>
+    <button onclick="testMetaMask()">Test MetaMask</button>
+    <button onclick="addSepoliaManually()">Add Sepolia to MetaMask</button>
+    <button onclick="switchToSepolia()">Switch to Sepolia</button>
+    <button onclick="testRPCConnection()">Test RPC Connection</button>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-item ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+        }
+        
+        function clearResults() {
+            results.innerHTML = '';
+        }
+        
+        async function testMetaMask() {
+            clearResults();
+            addResult('Testing MetaMask connection...', 'info');
+            
+            if (typeof window.ethereum === 'undefined') {
+                addResult('❌ MetaMask not detected! Please install MetaMask extension.', 'error');
+                return;
+            }
+            
+            addResult('✅ MetaMask detected', 'success');
+            
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                if (accounts.length === 0) {
+                    addResult('⚠️ No accounts connected. Click "Connect" to connect your wallet.', 'warning');
+                } else {
+                    addResult(`✅ Account connected: ${accounts[0]}`, 'success');
+                }
+            } catch (error) {
+                addResult(`❌ Error getting accounts: ${error.message}`, 'error');
+            }
+            
+            try {
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                const chainIdDecimal = parseInt(chainId, 16);
+                addResult(`Current Chain ID: ${chainIdDecimal} (${chainId})`, 'info');
+                
+                if (chainIdDecimal === 11155111) {
+                    addResult('✅ Already on Sepolia network!', 'success');
+                } else {
+                    addResult('⚠️ Not on Sepolia network. Current network needs to be switched.', 'warning');
+                }
+            } catch (error) {
+                addResult(`❌ Error getting chain ID: ${error.message}`, 'error');
+            }
+        }
+        
+        async function addSepoliaManually() {
+            addResult('Adding Sepolia network to MetaMask...', 'info');
+            
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: '0xaa36a7',
+                        chainName: 'Sepolia Test Network',
+                        nativeCurrency: {
+                            name: 'SepoliaETH',
+                            symbol: 'SepoliaETH',
+                            decimals: 18
+                        },
+                        rpcUrls: [
+                            'https://rpc.sepolia.dev',
+                            'https://rpc.sepolia.org',
+                            'https://eth-sepolia.public.blastapi.io'
+                        ],
+                        blockExplorerUrls: ['https://sepolia.etherscan.io']
+                    }]
+                });
+                addResult('✅ Sepolia network added successfully!', 'success');
+            } catch (error) {
+                addResult(`❌ Failed to add Sepolia network: ${error.message}`, 'error');
+            }
+        }
+        
+        async function switchToSepolia() {
+            addResult('Switching to Sepolia network...', 'info');
+            
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0xaa36a7' }]
+                });
+                addResult('✅ Successfully switched to Sepolia!', 'success');
+            } catch (error) {
+                if (error.code === 4902) {
+                    addResult('⚠️ Sepolia network not found. Adding it first...', 'warning');
+                    await addSepoliaManually();
+                } else {
+                    addResult(`❌ Failed to switch to Sepolia: ${error.message}`, 'error');
+                }
+            }
+        }
+        
+        async function testRPCConnection() {
+            addResult('Testing RPC endpoints...', 'info');
+            
+            const rpcs = [
+                'https://rpc.sepolia.dev',
+                'https://rpc.sepolia.org',
+                'https://eth-sepolia.public.blastapi.io'
+            ];
+            
+            for (const rpc of rpcs) {
+                try {
+                    const response = await fetch(rpc, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            method: 'eth_chainId',
+                            params: [],
+                            id: 1
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const chainId = parseInt(data.result, 16);
+                        if (chainId === 11155111) {
+                            addResult(`✅ ${rpc} - Working (Chain ID: ${chainId})`, 'success');
+                        } else {
+                            addResult(`⚠️ ${rpc} - Wrong Chain ID: ${chainId}`, 'warning');
+                        }
+                    } else {
+                        addResult(`❌ ${rpc} - HTTP Error: ${response.status}`, 'error');
+                    }
+                } catch (error) {
+                    addResult(`❌ ${rpc} - Connection failed: ${error.message}`, 'error');
+                }
+            }
+        }
+        
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            addResult('Sepolia Network Test Page Loaded', 'info');
+            testMetaMask();
+        });
+    </script>
+</body>
+</html>

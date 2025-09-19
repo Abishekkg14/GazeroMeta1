@@ -94,13 +94,18 @@ app.use(express.json());
 // In-memory transaction history (simple demo store)
 const txHistory = [];
 
-// Minimal ERC20 ABI for transfer
+// Complete ERC20 ABI for USDC
 const ERC20_ABI = [
-    "function transfer(address to, uint256 amount) returns (bool)"
+    "function transfer(address to, uint256 amount) returns (bool)",
+    "function balanceOf(address owner) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+    "function symbol() view returns (string)",
+    "function name() view returns (string)",
+    "event Transfer(address indexed from, address indexed to, uint256 value)"
 ];
 
-// USDC address used by the frontend (Sepolia/test address)
-const USDC_ADDRESS = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+// USDC address used by the frontend (Sepolia/test address) - Updated to correct contract
+const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
 
 // POST endpoint to receive send requests from frontend
 // Body: { to: string, amount: string, mode?: 'server'|'client' }
@@ -139,7 +144,7 @@ app.post('/send-usdc', async (req, res) => {
             return res.json({ ok: true, mode: 'server', tx: entry });
         }
 
-        // Otherwise prepare a client-side transaction (return call data for frontend to sign/send)
+        // Prepare a client-side transaction (return call data for frontend to sign/send)
         const iface = new ethers.Interface(ERC20_ABI);
         const data = iface.encodeFunctionData('transfer', [to, amountUnits]);
 
@@ -149,8 +154,9 @@ app.post('/send-usdc', async (req, res) => {
             value: 0
         };
 
-        // store a queued entry (client will actually send)
-        txHistory.unshift({ time: new Date().toISOString(), mode: 'client', to, amount, prepared, status: 'queued' });
+        console.log(`🔧 Prepared USDC transfer: ${amount} USDC to ${to}`);
+        console.log('🔧 Using USDC contract:', USDC_ADDRESS);
+        console.log('🔧 Transaction data:', prepared);
 
         return res.json({ ok: true, mode: 'client', prepared });
 
@@ -366,12 +372,26 @@ app.post('/estimate-gas', async (req, res) => {
 // Client reports a transaction that it sent
 app.post('/report-tx', (req, res) => {
     try {
-        const { hash, to, amount, from } = req.body || {};
+        const { hash, to, amount, from, status } = req.body || {};
         if (!hash) return res.status(400).json({ error: 'Missing tx hash' });
-        const entry = { time: new Date().toISOString(), mode: 'client', from: from || 'client', to, amount, hash, status: 'reported' };
+        
+        const entry = { 
+            time: new Date().toISOString(), 
+            mode: 'client', 
+            from: from || 'client', 
+            to, 
+            amount, 
+            hash, 
+            status: status || 'sent',
+            timestamp: new Date().toISOString()
+        };
+        
         txHistory.unshift(entry);
+        console.log('Transaction reported:', entry);
+        
         return res.json({ ok: true, entry });
     } catch (err) {
+        console.error('Error reporting transaction:', err);
         return res.status(500).json({ error: 'report failed', details: err.message });
     }
 });

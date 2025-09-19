@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Contract Address Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-item { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug: Contract Address Test</h1>
+    <div id="debugResults"></div>
+    <button onclick="testContractAddress()">Test Contract Address</button>
+    <button onclick="testTransaction()">Test Transaction Preparation</button>
+    
+    <script>
+        const debugResults = document.getElementById('debugResults');
+        
+        function addDebug(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `debug-item ${type}`;
+            div.textContent = message;
+            debugResults.appendChild(div);
+        }
+        
+        function clearDebug() {
+            debugResults.innerHTML = '';
+        }
+        
+        // Test the contract address directly
+        function testContractAddress() {
+            clearDebug();
+            addDebug('Testing contract address...', 'info');
+            
+            // This should match what's in app.js
+            const USDC_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+            const OLD_USDC_ADDRESS = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+            
+            addDebug(`Current USDC Address: ${USDC_ADDRESS}`, 'info');
+            addDebug(`Old USDC Address: ${OLD_USDC_ADDRESS}`, 'info');
+            
+            if (USDC_ADDRESS === "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238") {
+                addDebug('✅ Frontend has CORRECT USDC address', 'success');
+            } else {
+                addDebug('❌ Frontend has WRONG USDC address', 'error');
+            }
+        }
+        
+        async function testTransaction() {
+            addDebug('Testing transaction preparation...', 'info');
+            
+            try {
+                const response = await fetch('/send-usdc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        to: '0x45E5b33f3021128A3fE4a3FEe23ec937894068cA', 
+                        amount: '0.01', 
+                        mode: 'client' 
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addDebug('✅ Backend responded successfully', 'success');
+                    addDebug(`Backend returned contract: ${data.prepared.to}`, 'info');
+                    
+                    const expectedAddress = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+                    const oldAddress = "0x744E17f0d06BA82981A1bE425236d01500984B5d";
+                    
+                    if (data.prepared.to === expectedAddress) {
+                        addDebug('✅ Backend is using CORRECT USDC contract', 'success');
+                    } else if (data.prepared.to === oldAddress) {
+                        addDebug('❌ Backend is using OLD USDC contract - THIS IS THE PROBLEM!', 'error');
+                    } else {
+                        addDebug(`❌ Backend is using UNKNOWN contract: ${data.prepared.to}`, 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    addDebug(`❌ Backend error: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                addDebug(`❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-run on page load
+        window.addEventListener('load', () => {
+            addDebug('Debug page loaded - click buttons to test', 'info');
+            testContractAddress();
+        });
+    </script>
+</body>
+</html>
